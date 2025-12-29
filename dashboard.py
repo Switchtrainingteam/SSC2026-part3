@@ -73,7 +73,7 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    st.write("Use this sidebar to toggle between different datasets from your Excel file.")
+    st.write("Switch Training Department 2026")
 
 # -----------------------------------------------------------------------------
 # 3. COLUMN 2: MAIN DASHBOARD AREA (3 ROWS)
