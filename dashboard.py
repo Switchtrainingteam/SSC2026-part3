@@ -64,9 +64,7 @@ def process_lob_data(df):
 # 2. COLUMN 1: SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.image("https://www.google.com/url?sa=t&source=web&rct=j&url=https%3A%2F%2Fwww.straitsquay.com%2Fshops%2Fswitch-straits-quay%2F&ved=0CBUQjRxqFwoTCLCHwu3H4pEDFQAAAAAdAAAAABA-&opi=89978449",
-        width=600 
-    )
+    st.image("switch-straits-quay-logo.jpeg")
     
     st.header("⚙️ SSC 2026 Dashboard")
     
