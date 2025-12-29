@@ -23,10 +23,7 @@ st.markdown("""
 # --- LOAD DATA (Embedded for reliability) ---
 # You can replace these with pd.read_csv('your_file.csv') in production
 
-<div class="h-16 flex items-center justify-center text-xl font-bold border-b border-gray-700">
-                SSC Dashboard
-
-# 1. Regional Data
+# 1. SSC 2026 Regional Perfomance Data
 df_regional = pd.DataFrame({
     'Region': ['Central', 'Northern', 'Southern', 'East Coast', 'Sabah', 'Sarawak'],
     'Pass': [73, 48, 49, 55, 42, 36],
@@ -34,7 +31,7 @@ df_regional = pd.DataFrame({
     'Total Headcount': [98, 64, 62, 67, 50, 50]
 })
 
-# 2. Outlet Data
+# 2. Outlet Perfomance Data
 df_outlet = pd.DataFrame({
     'Outlet': ['MT', 'PY', 'EV', 'MF'],
     'Pass': [4, 5, 3, 1],
@@ -67,7 +64,7 @@ def process_lob_data(df):
 # 2. COLUMN 1: SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.header("⚙️ Dashboard Settings")
+    st.header("⚙️ SSC 2026 Dashboard")
     
     # User selects which view to see
     selected_view = st.radio(
