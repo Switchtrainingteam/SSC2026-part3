@@ -64,6 +64,10 @@ def process_lob_data(df):
 # 2. COLUMN 1: SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
+    st.image("https://www.google.com/url?sa=t&source=web&rct=j&url=https%3A%2F%2Fwww.straitsquay.com%2Fshops%2Fswitch-straits-quay%2F&ved=0CBUQjRxqFwoTCLCHwu3H4pEDFQAAAAAdAAAAABA-&opi=89978449",
+        width=600 
+    )
+    
     st.header("⚙️ SSC 2026 Dashboard")
     
     # User selects which view to see
@@ -73,7 +77,7 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    st.write("Switch Training Department 2026")
+    st.write("Switch Training Department")
 
 # -----------------------------------------------------------------------------
 # 3. COLUMN 2: MAIN DASHBOARD AREA (3 ROWS)
