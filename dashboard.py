@@ -23,6 +23,9 @@ st.markdown("""
 # --- LOAD DATA (Embedded for reliability) ---
 # You can replace these with pd.read_csv('your_file.csv') in production
 
+<div class="h-16 flex items-center justify-center text-xl font-bold border-b border-gray-700">
+                SSC Dashboard
+
 # 1. Regional Data
 df_regional = pd.DataFrame({
     'Region': ['Central', 'Northern', 'Southern', 'East Coast', 'Sabah', 'Sarawak'],
