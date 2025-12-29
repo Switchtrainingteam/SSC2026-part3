@@ -74,7 +74,20 @@ with st.sidebar:
         ["Regional Comparison", "Outlet Comparison", "LOB Analysis"]
     )
     
-    st.markdown("---")
+    st.markdown(
+        """
+        <style>
+            div[data-testid="stSidebarNav"] + div {
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-end;
+                height: 100%;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.write("Switch Training Department")
 
 # -----------------------------------------------------------------------------
