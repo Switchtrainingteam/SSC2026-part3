@@ -7,18 +7,20 @@ import plotly.express as px
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="SSC 2026 Dashboard", layout="wide")
 
-# CSS to style the metrics cards to look like a "Row"
-st.markdown("""
-<style>
-    div[data-testid="metric-container"] {
-        background-color: #f0f2f6;
-        border: 1px solid #d6d6d6;
-        padding: 10px;
-        border-radius: 5px;
-        overflow-wrap: break-word;
-    }
-</style>
-""", unsafe_allow_html=True)
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(label="Total Headcount", value="861")
+
+with col2:
+    st.metric(label="Total Pass", value="425")
+
+with col3:
+    st.metric(label="Total Fail", value="436")
+
+with col4:
+    # You can also add a delta (the small arrow for changes)
+    st.metric(label="Pass Rate", value="49.4%", delta="-0.5%")
 
 # --- LOAD DATA (Embedded for reliability) ---
 # You can replace these with pd.read_csv('your_file.csv') in production
