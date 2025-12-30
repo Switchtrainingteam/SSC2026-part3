@@ -51,9 +51,9 @@ def process_lob_data(df):
 # 2. COLUMN 1: SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.image("switch-straits-quay-logo.jpeg")
+    st.image("IMG_2737.PNG")
     
-    st.header("⚙️ SSC 2026 Dashboard")
+    st.header(" SSC 2026 Dashboard")
     
     # User selects which view to see
     selected_view = st.selectbox(
