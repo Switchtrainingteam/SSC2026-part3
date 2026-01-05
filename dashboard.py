@@ -51,7 +51,7 @@ def process_lob_data(df):
 # 2. COLUMN 1: SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.image("IMG_2737.PNG")
+    st.image("switch-straits-quay-logo.jpeg")
     
     st.header(" SSC 2026 Dashboard")
     
@@ -76,7 +76,7 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.write("Switch")
+    st.write("Switch Training Department")
 
 # -----------------------------------------------------------------------------
 # 3. COLUMN 2: MAIN DASHBOARD AREA (3 ROWS)
