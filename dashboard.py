@@ -76,7 +76,7 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.write("Switch Training Department")
+    st.write("Switch")
 
 # -----------------------------------------------------------------------------
 # 3. COLUMN 2: MAIN DASHBOARD AREA (3 ROWS)
