@@ -67,7 +67,7 @@ with st.sidebar:
     st.header("⚙️ Dashboard Settings")
     
     # User selects which view to see
-    selected_view = st.radio(
+    selected_view = st.selectbox(
         "Select Data View:",
         ["Regional Comparison", "Outlet Comparison", "LOB Analysis"]
     )
