@@ -1,218 +1,283 @@
-import streamlit as st
+import json
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 
-# --- Page Configuration ---
-st.set_page_config(page_title="SSC 2026 Dashboard", layout="wide")
+# Load the initial data from CSVs to embed as default state
+lob_df = pd.read_csv('SSC 2026 Data.xlsx - LOB Comparison.csv')
+region_df = pd.read_csv('SSC 2026 Data.xlsx - Regional Comparison.csv')
 
-# --- Helper Function to Parse Data ---
-def load_data(file_path):
-    """
-    Parses the CSV file which contains multiple tables separated by empty rows.
-    Returns a dictionary of DataFrames.
-    """
-    try:
-        # Read the raw file without header to detect blocks
-        raw_df = pd.read_csv(file_path, header=None)
+# Convert dataframes to list of dictionaries for JSON serialization
+regional_data = region_df.to_dict(orient='records')
+lob_data = lob_df.to_dict(orient='records')
+
+initial_data = {
+    "regional": regional_data,
+    "lob": lob_data
+}
+
+# Read the original HTML template
+with open('index.html', 'r') as f:
+    html_content = f.read()
+
+# 1. Inject SheetJS library for Excel parsing in the <head>
+sheetjs_script = '<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>'
+html_content = html_content.replace('</head>', f'{sheetjs_script}\n</head>')
+
+# 2. Inject File Input in the Header
+upload_button_html = """
+        <div class="header">
+            <div>
+                <h1>Performance Dashboard</h1>
+                <p style="color: #666;">Data Source: SSC 2026 Data.xlsx</p>
+            </div>
+            <div style="text-align: right;">
+                <label for="uploadFile" style="background: #3498db; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; display: inline-block;">
+                    <i class="fas fa-file-excel"></i> Upload Excel File
+                </label>
+                <input type="file" id="uploadFile" accept=".xlsx, .xls" style="display: none;" />
+                <p id="fileName" style="font-size: 0.8rem; margin-top: 5px; color: #666;"></p>
+            </div>
+        </div>
+"""
+# Replace the existing header div with our new one
+# We use regex or simple string replacement if the structure is known. 
+# Since I know the exact string from previous step:
+old_header = """<div class="header">
+            <h1>Performance Dashboard</h1>
+            <p style="color: #666;">Data Source: SSC 2026 Data.xlsx</p>
+        </div>"""
+html_content = html_content.replace(old_header, upload_button_html)
+
+# 3. Inject the Main Logic Script before </body>
+# This script handles: 
+#   - Parsing the initial JSON data
+#   - Rendering Charts (Chart.js)
+#   - Calculating totals for Cards
+#   - Handling File Upload and re-rendering
+main_script = f"""
+<script>
+    // --- 1. Initial Data (Embedded from Python) ---
+    const initialData = {json.dumps(initial_data)};
+
+    // --- 2. State & Chart Instances ---
+    let regionChartInstance = null;
+    let lobChartInstance = null;
+
+    // --- 3. Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {{
+        processAndRender(initialData.regional, initialData.lob);
         
-        tables = {}
-        current_block = []
-        
-        # Iterate through rows to split by empty lines
-        for index, row in raw_df.iterrows():
-            # Check if row is effectively empty (all NaN or empty strings)
-            if row.isnull().all():
-                if current_block:
-                    tables = process_block(current_block, tables)
-                    current_block = []
-            else:
-                current_block.append(row.values)
-        
-        # Process the last block if exists
-        if current_block:
-            tables = process_block(current_block, tables)
+        // File Upload Event Listener
+        document.getElementById('uploadFile').addEventListener('change', handleFileUpload);
+    }});
+
+    // --- 4. File Upload Handler ---
+    function handleFileUpload(event) {{
+        const file = event.target.files[0];
+        if (!file) return;
+
+        document.getElementById('fileName').textContent = file.name;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {{
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {{type: 'array'}});
+
+            // Parse specific sheets
+            // Assuming sheet names match the provided structure roughly
+            // We look for sheets that likely contain "Regional" or "LOB"
             
-        return tables
-    except Exception as e:
-        st.error(f"Error loading file: {e}")
-        return None
+            let regionalSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('regional'));
+            let lobSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('lob') || n.toLowerCase().includes('comparison'));
 
-def process_block(block_data, tables_dict):
-    """Helper to convert a list of rows into a named DataFrame"""
-    if not block_data:
-        return tables_dict
-        
-    df = pd.DataFrame(block_data)
-    header = df.iloc[0]
-    df = df[1:].copy()
-    df.columns = header
-    
-    # Identify table type based on first column name
-    first_col = str(header[0]).strip()
-    
-    if "Result" in first_col:
-        tables_dict["Product_Data"] = df
-    elif "Region" in first_col:
-        tables_dict["Region_Data"] = df
-    elif "Outlet" in first_col:
-        tables_dict["Outlet_Data"] = df
-        
-    return tables_dict
+            // Fallback: If not found, assume index 0 and 1 if available
+            if (!regionalSheetName) regionalSheetName = workbook.SheetNames[1]; // Often 2nd sheet
+            if (!lobSheetName) lobSheetName = workbook.SheetNames[0];      // Often 1st sheet
 
-# --- Sidebar (Column 1) ---
-with st.sidebar:
-    st.title("Dashboard Controls")
-    
-    # File Selection
-    level_choice = st.selectbox(
-        "Select Data Level",
-        ["Level 1", "Level 2", "Level 3"]
-    )
-    
-    # Map selection to filename
-    file_map = {
-        "Level 1": "SSC 2026 Data.xlsx - Level 1.csv",
-        "Level 2": "SSC 2026 Data.xlsx - Level 2.csv",
-        "Level 3": "SSC 2026 Data.xlsx - Level 3.csv"
-    }
-    
-    selected_file = file_map[level_choice]
-    
-    st.info(f"Loaded: {selected_file}")
-    st.markdown("---")
-    st.markdown("**Instructions:**\nSelect a level to view the performance metrics.")
+            const newRegionalData = XLSX.utils.sheet_to_json(workbook.Sheets[regionalSheetName]);
+            const newLobData = XLSX.utils.sheet_to_json(workbook.Sheets[lobSheetName]);
 
-# --- Main Content (Column 2) ---
+            // Re-render dashboard
+            processAndRender(newRegionalData, newLobData);
+        }};
+        reader.readAsArrayBuffer(file);
+    }}
 
-# Load Data
-data_tables = load_data(selected_file)
+    // --- 5. Main Processing & Render Function ---
+    function processAndRender(regionalData, lobData) {{
+        renderCards(regionalData);
+        renderTable(regionalData);
+        renderRegionChart(regionalData);
+        renderLobChart(lobData);
+    }}
 
-if data_tables and "Region_Data" in data_tables:
-    region_df = data_tables["Region_Data"]
-    
-    # Data Cleaning for Region Table
-    # Ensure numeric columns are actually numeric
-    cols_to_numeric = ['Pass', 'Fail', 'Total Headcount']
-    for col in cols_to_numeric:
-        if col in region_df.columns:
-            region_df[col] = pd.to_numeric(region_df[col], errors='coerce').fillna(0)
+    // --- 6. Render Cards ---
+    function renderCards(data) {{
+        let totalHeadcount = 0;
+        let totalPass = 0;
+        let totalFail = 0;
 
-    # --- Row 1: Data Cards ---
-    st.markdown("### 📊 Key Performance Indicators")
-    
-    # Calculate Metrics
-    total_pass = int(region_df['Pass'].sum())
-    total_fail = int(region_df['Fail'].sum())
-    total_headcount = int(region_df['Total Headcount'].sum())
-    pass_rate = (total_pass / total_headcount * 100) if total_headcount > 0 else 0
-    
-    # Layout 3 cards
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric(label="Total Pass", value=f"{total_pass:,}")
-        
-    with col2:
-        st.metric(label="Total Fail", value=f"{total_fail:,}")
-        
-    with col3:
-        st.metric(label="Overall Pass Rate", value=f"{pass_rate:.1f}%")
-        
-    st.markdown("---")
+        data.forEach(row => {{
+            // Clean keys just in case (trim spaces)
+            const headcount = row['Total Headcount'] || row['Total_Headcount'] || 0;
+            const pass = row['Pass'] || 0;
+            const fail = row['Fail'] || 0;
 
-    # --- Row 2: Graphs ---
-    st.markdown("### 📈 Visual Analysis")
-    
-    # Create 2 columns for graphs if we have product data (Level 1), otherwise 1
-    graph_col1, graph_col2 = st.columns([2, 1])
-    
-    with graph_col1:
-        # Stacked Bar Chart for Region Pass/Fail
-        # Melt data for plotly
-        melted_region = region_df.melt(id_vars=['Region'], value_vars=['Pass', 'Fail'], 
-                                     var_name='Status', value_name='Count')
-        
-        fig_region = px.bar(
-            melted_region, 
-            x='Region', 
-            y='Count', 
-            color='Status', 
-            title=f"Pass vs Fail by Region ({level_choice})",
-            text_auto=True,
-            color_discrete_map={'Pass': '#4CAF50', 'Fail': '#FF5252'},
-            barmode='group'
-        )
-        st.plotly_chart(fig_region, use_container_width=True)
+            totalHeadcount += parseInt(headcount);
+            totalPass += parseInt(pass);
+            totalFail += parseInt(fail);
+        }});
 
-    with graph_col2:
-        # Pie chart for overall distribution
-        fig_pie = px.pie(
-            names=['Pass', 'Fail'], 
-            values=[total_pass, total_fail],
-            title="Overall Status Distribution",
-            color=['Pass', 'Fail'],
-            color_discrete_map={'Pass': '#4CAF50', 'Fail': '#FF5252'}
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-    
-    # Extra Graph for Product Data (Only available in Level 1)
-    if "Product_Data" in data_tables:
-        st.subheader("Product Performance (Level 1 Specific)")
-        prod_df = data_tables["Product_Data"]
+        const passRate = totalHeadcount > 0 ? ((totalPass / totalHeadcount) * 100).toFixed(1) + '%' : '0%';
+
+        // Update DOM
+        // Assuming cards are in specific order: Headcount, Pass, Fail, Rate
+        // We select by card-info h3
+        const values = document.querySelectorAll('.card-info h3');
+        if(values.length >= 4) {{
+            values[0].textContent = totalHeadcount;
+            values[1].textContent = totalPass;
+            values[2].textContent = totalFail;
+            values[3].textContent = passRate;
+        }}
+    }}
+
+    // --- 7. Render Table ---
+    function renderTable(data) {{
+        const tbody = document.querySelector('table tbody');
+        tbody.innerHTML = ''; // Clear existing
+
+        data.forEach(row => {{
+            const region = row['Region'];
+            const hc = row['Total Headcount'];
+            const pass = row['Pass'];
+            const fail = row['Fail'];
+            const rate = hc > 0 ? ((pass / hc) * 100).toFixed(1) + '%' : '0%';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${{region}}</td>
+                <td>${{hc}}</td>
+                <td><span class="badge badge-green">${{pass}}</span></td>
+                <td><span class="badge badge-red">${{fail}}</span></td>
+                <td>${{rate}}</td>
+            `;
+            tbody.appendChild(tr);
+        }});
+    }}
+
+    // --- 8. Render Region Chart ---
+    function renderRegionChart(data) {{
+        const ctx = document.getElementById('regionChart').getContext('2d');
         
-        # Simple processing for visualization: Pivot longer
-        # The structure is Result (Product+Status) | Central | Northern ...
-        # We'll just show the raw table in an interactive way or a heatmap
+        const labels = data.map(d => d.Region);
+        const passData = data.map(d => d.Pass);
+        const failData = data.map(d => d.Fail);
+
+        if (regionChartInstance) regionChartInstance.destroy();
+
+        regionChartInstance = new Chart(ctx, {{
+            type: 'bar',
+            data: {{
+                labels: labels,
+                datasets: [
+                    {{
+                        label: 'Pass',
+                        data: passData,
+                        backgroundColor: '#2ecc71'
+                    }},
+                    {{
+                        label: 'Fail',
+                        data: failData,
+                        backgroundColor: '#e74c3c'
+                    }}
+                ]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {{
+                    y: {{ beginAtZero: true }}
+                }}
+            }}
+        }});
+    }}
+
+    // --- 9. Render LOB Chart ---
+    function renderLobChart(data) {{
+        // Data Structure: Result (e.g. "iPhone (Pass)"), Central, Northern...
+        // Need to aggregate by Product
         
-        # Clean numeric columns in Product Data
-        region_cols = [c for c in prod_df.columns if c != 'Result']
-        for c in region_cols:
-            prod_df[c] = pd.to_numeric(prod_df[c], errors='coerce').fillna(0)
+        const products = {{}}; // {{ "iPhone": {{ pass: 0, fail: 0 }}, ... }}
+
+        data.forEach(row => {{
+            const resultStr = row['Result']; // "iPhone (Pass)"
             
-        # Add a total column for sorting
-        prod_df['Total'] = prod_df[region_cols].sum(axis=1)
-        
-        fig_prod = px.bar(
-            prod_df.sort_values('Total', ascending=True), 
-            x='Total', 
-            y='Result', 
-            orientation='h',
-            title="Total Counts by Product/Status Category",
-            text_auto=True
-        )
-        st.plotly_chart(fig_prod, use_container_width=True)
-
-    st.markdown("---")
-
-    # --- Row 3: Data Table ---
-    st.markdown("### 📋 Detailed Data View")
-    
-    # Use tabs to organize multiple tables
-    tab_names = ["Region Summary", "Outlet Summary"]
-    if "Product_Data" in data_tables:
-        tab_names.insert(0, "Product Results")
-        
-    tabs = st.tabs(tab_names)
-    
-    if "Product_Data" in data_tables:
-        with tabs[0]:
-            st.dataframe(data_tables["Product_Data"], use_container_width=True)
-            # Remove from list to handle indices correctly for others
-            tab_names.pop(0) 
-            # Note: This logic depends on the specific insertion order, simpler to check keys directly
+            // Basic parsing assuming format "Product (Status)"
+            let product = "";
+            let status = "";
             
-    # Display Region Data
-    # Find the tab index for Region Summary. If Product Data exists, Region is index 1, else 0.
-    region_tab_idx = 1 if "Product_Data" in data_tables else 0
-    with tabs[region_tab_idx]:
-        st.dataframe(region_df, use_container_width=True)
-        
-    # Display Outlet Data
-    outlet_tab_idx = 2 if "Product_Data" in data_tables else 1
-    if "Outlet_Data" in data_tables:
-        with tabs[outlet_tab_idx]:
-            st.dataframe(data_tables["Outlet_Data"], use_container_width=True)
+            if (resultStr.includes('(')) {{
+                const parts = resultStr.split('(');
+                product = parts[0].trim();
+                status = parts[1].replace(')', '').trim().toLowerCase();
+            }} else {{
+                product = resultStr;
+                status = "unknown";
+            }}
 
-else:
-    st.warning("Data not found or could not be parsed. Please check the CSV files.")
+            // Sum up all region columns
+            // We assume other columns are regions
+            let count = 0;
+            for (let key in row) {{
+                if (key !== 'Result') {{
+                    count += parseInt(row[key] || 0);
+                }}
+            }}
+
+            if (!products[product]) products[product] = {{ pass: 0, fail: 0 }};
+            if (status === 'pass') products[product].pass += count;
+            else if (status === 'fail') products[product].fail += count;
+        }});
+
+        const labels = Object.keys(products);
+        const passData = labels.map(p => products[p].pass);
+        const failData = labels.map(p => products[p].fail);
+
+        const ctx = document.getElementById('lobChart').getContext('2d');
+
+        if (lobChartInstance) lobChartInstance.destroy();
+
+        lobChartInstance = new Chart(ctx, {{
+            type: 'bar',
+            data: {{
+                labels: labels,
+                datasets: [
+                    {{
+                        label: 'Pass',
+                        data: passData,
+                        backgroundColor: '#2ecc71'
+                    }},
+                    {{
+                        label: 'Fail',
+                        data: failData,
+                        backgroundColor: '#e74c3c'
+                    }}
+                ]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {{
+                    y: {{ beginAtZero: true }}
+                }}
+            }}
+        }});
+    }}
+</script>
+"""
+
+html_content = html_content.replace('</body>', f'{main_script}\n</body>')
+
+# Save the final HTML
+with open('dashboard.html', 'w') as f:
+    f.write(html_content)
