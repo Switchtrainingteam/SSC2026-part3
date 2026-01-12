@@ -64,7 +64,7 @@ def process_lob_data(df):
 # 2. COLUMN 1: SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.header("⚙️ Dashboard Settings")
+    st.header("Switch Staff Challenge 2026")
     
     # User selects which view to see
     selected_view = st.selectbox(
