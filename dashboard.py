@@ -1,140 +1,149 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 
-# Set page configuration to wide mode
+# -----------------------------------------------------------------------------
+# 1. PAGE CONFIGURATION & DATA LOADING
+# -----------------------------------------------------------------------------
 st.set_page_config(page_title="SSC 2026 Dashboard", layout="wide")
 
-# Function to parse the complex CSV structure
-def load_and_parse_data(file_path):
-    # Read the file without header to detect blocks
-    try:
-        df_raw = pd.read_csv(file_path, header=None)
-    except FileNotFoundError:
-        st.error(f"File not found: {file_path}. Please ensure the CSV files are in the same directory.")
-        return None, None
-
-    # Container for parsed tables
-    tables = {}
-    
-    # 1. Find and parse Region Table
-    # Look for the row containing "Region" in the first column
-    region_start = df_raw[df_raw[0] == 'Region'].index
-    if not region_start.empty:
-        start_idx = region_start[0]
-        # Find the next empty row to define the block
-        next_empty = df_raw.index[df_raw[0].isna()].tolist()
-        next_empty = [x for x in next_empty if x > start_idx]
-        end_idx = next_empty[0] if next_empty else len(df_raw)
-        
-        # Extract and clean
-        region_df = df_raw.iloc[start_idx+1:end_idx].copy()
-        region_df.columns = df_raw.iloc[start_idx]
-        region_df = region_df.reset_index(drop=True)
-        
-        # Convert numeric columns
-        for col in ['Pass', 'Fail', 'Total Headcount']:
-            if col in region_df.columns:
-                region_df[col] = pd.to_numeric(region_df[col], errors='coerce').fillna(0)
-        
-        tables['region'] = region_df
-
-    # 2. Find and parse Product Table (Only in Level 1)
-    # Look for row containing "Result"
-    product_start = df_raw[df_raw[0] == 'Result'].index
-    if not product_start.empty:
-        start_idx = product_start[0]
-        # Find next empty
-        next_empty = df_raw.index[df_raw[0].isna()].tolist()
-        next_empty = [x for x in next_empty if x > start_idx]
-        end_idx = next_empty[0] if next_empty else len(df_raw)
-        
-        product_df = df_raw.iloc[start_idx+1:end_idx].copy()
-        product_df.columns = df_raw.iloc[start_idx]
-        tables['product'] = product_df
-
-    return tables
-
-# --- LAYOUT SETUP ---
-
-# 1. Sidebar
-with st.sidebar:
-    st.header("Dashboard Controls")
-    # Map friendly names to actual filenames
-    # NOTE: Update these filenames if yours are different
-    file_map = {
-        "Level 1": "SSC 2026 Data.xlsx - Level 1.csv",
-        "Level 2": "SSC 2026 Data.xlsx - Level 2.csv",
-        "Level 3": "SSC 2026 Data.xlsx - Level 3.csv"
+# CSS to style the metrics cards to look like a "Row"
+st.markdown("""
+<style>
+    div[data-testid="metric-container"] {
+        background-color: #f0f2f6;
+        border: 1px solid #d6d6d6;
+        padding: 10px;
+        border-radius: 5px;
+        overflow-wrap: break-word;
     }
-    
-    selected_level = st.selectbox("Select Level", list(file_map.keys()))
-    st.info(f"Viewing data for: {selected_level}")
+</style>
+""", unsafe_allow_html=True)
 
-# Load data for selected level
-data_tables = load_and_parse_data(file_map[selected_level])
+# --- LOAD DATA (Embedded for reliability) ---
+# You can replace these with pd.read_csv('your_file.csv') in production
 
-if data_tables and 'region' in data_tables:
-    df_region = data_tables['region']
+# 1. Regional Data
+df_regional = pd.DataFrame({
+    'Region': ['Central', 'Northern', 'Southern', 'East Coast', 'Sabah', 'Sarawak'],
+    'Pass': [73, 48, 49, 55, 42, 36],
+    'Fail': [25, 16, 13, 12, 8, 14],
+    'Total Headcount': [98, 64, 62, 67, 50, 50]
+})
+
+# 2. Outlet Data
+df_outlet = pd.DataFrame({
+    'Outlet': ['MT', 'PY', 'EV', 'MF'],
+    'Pass': [4, 5, 3, 1],
+    'Fail': [2, 3, 2, 4]
+})
+
+# 3. LOB Data
+df_lob = pd.DataFrame({
+    'Result': [
+        'iPhone (Pass)', 'iPhone (Fail)', 'Mac (Pass)', 'Mac (Fail)',
+        'iPad (Pass)', 'iPad (Fail)', 'Apple Watch (Pass)', 'Apple Watch (Fail)'
+    ],
+    'Central': [20, 45, 12, 24, 23, 12, 11, 7],
+    'Northern': [45, 56, 9, 11, 11, 8, 45, 3],
+    'Sarawak': [23, 12, 56, 7, 44, 4, 67, 99],
+    'Sabah': [12, 54, 34, 6, 8, 22, 5, 66]
+})
+
+# Helper to process LOB data for charts
+def process_lob_data(df):
+    # Melt to long format
+    df_long = df.melt(id_vars=['Result'], var_name='Region', value_name='Count')
+    # Extract Status (Pass/Fail)
+    df_long['Status'] = df_long['Result'].apply(lambda x: 'Pass' if '(Pass)' in x else 'Fail')
+    # Extract Product
+    df_long['Product'] = df_long['Result'].apply(lambda x: x.split(' (')[0])
+    return df_long
+
+# -----------------------------------------------------------------------------
+# 2. COLUMN 1: SIDEBAR
+# -----------------------------------------------------------------------------
+with st.sidebar:
+    st.header("⚙️ Dashboard Settings")
     
-    # --- SECOND COLUMN (Main Area) ---
-    
-    # Row 1: Data Cards
-    st.subheader("Key Performance Indicators")
-    
-    # Calculate Metrics
-    total_headcount = df_region['Total Headcount'].sum()
-    total_pass = df_region['Pass'].sum()
-    total_fail = df_region['Fail'].sum()
-    pass_rate = (total_pass / total_headcount * 100) if total_headcount > 0 else 0
-    
-    # Display Cards
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Headcount", f"{int(total_headcount)}")
-    col2.metric("Total Pass", f"{int(total_pass)}")
-    col3.metric("Total Fail", f"{int(total_fail)}")
-    col4.metric("Pass Rate", f"{pass_rate:.1f}%")
+    # User selects which view to see
+    selected_view = st.radio(
+        "Select Data View:",
+        ["Regional Comparison", "Outlet Comparison", "LOB Analysis"]
+    )
     
     st.markdown("---")
+    st.write("Use this sidebar to toggle between different datasets from your Excel file.")
 
-    # Row 2: Graphs
-    st.subheader("Visualizations")
+# -----------------------------------------------------------------------------
+# 3. COLUMN 2: MAIN DASHBOARD AREA (3 ROWS)
+# -----------------------------------------------------------------------------
+
+st.title(f"📊 {selected_view}")
+
+# --- PREPARE DATA BASED ON SELECTION ---
+if selected_view == "Regional Comparison":
+    main_df = df_regional
     
-    # Create a layout for graphs
-    chart_col1, chart_col2 = st.columns(2)
+    # Calculate KPIs
+    total_pass = main_df['Pass'].sum()
+    total_fail = main_df['Fail'].sum()
+    total_hc = main_df['Total Headcount'].sum()
+    pass_rate = (total_pass / total_hc) * 100
     
-    with chart_col1:
-        # Bar Chart: Pass vs Fail by Region
-        fig_region = px.bar(
-            df_region, 
-            x='Region', 
-            y=['Pass', 'Fail'], 
-            title="Pass vs Fail by Region",
-            barmode='group',
-            text_auto=True
-        )
-        st.plotly_chart(fig_region, use_container_width=True)
-        
-    with chart_col2:
-        # Pie Chart: Overall Pass vs Fail
-        pie_data = pd.DataFrame({
-            'Status': ['Pass', 'Fail'],
-            'Count': [total_pass, total_fail]
-        })
-        fig_pie = px.pie(pie_data, values='Count', names='Status', title="Overall Pass vs Fail Distribution",
-                         color='Status', color_discrete_map={'Pass':'lightgreen', 'Fail':'salmon'})
-        st.plotly_chart(fig_pie, use_container_width=True)
+    # Prepare Chart
+    # Melt for grouped bar chart
+    chart_df = main_df.melt(id_vars=['Region'], value_vars=['Pass', 'Fail'], var_name='Status', value_name='Count')
+    fig = px.bar(chart_df, x='Region', y='Count', color='Status', barmode='group',
+                 color_discrete_map={'Pass': '#2ecc71', 'Fail': '#e74c3c'}, text_auto=True)
 
-    # Optional: Product Breakdown for Level 1
-    if 'product' in data_tables:
-        st.subheader("Product Breakdown")
-        df_prod = data_tables['product']
-        # Simple cleanup for display
-        st.dataframe(df_prod, use_container_width=True)
+elif selected_view == "Outlet Comparison":
+    main_df = df_outlet
+    
+    # Calculate KPIs
+    total_pass = main_df['Pass'].sum()
+    total_fail = main_df['Fail'].sum()
+    total_hc = total_pass + total_fail
+    pass_rate = (total_pass / total_hc) * 100
+    
+    # Prepare Chart
+    chart_df = main_df.melt(id_vars=['Outlet'], value_vars=['Pass', 'Fail'], var_name='Status', value_name='Count')
+    fig = px.bar(chart_df, x='Outlet', y='Count', color='Status', barmode='group',
+                 color_discrete_map={'Pass': '#2ecc71', 'Fail': '#e74c3c'}, text_auto=True)
 
-    st.markdown("---")
+elif selected_view == "LOB Analysis":
+    main_df = df_lob
+    processed_lob = process_lob_data(df_lob)
+    
+    # Calculate KPIs
+    total_pass = processed_lob[processed_lob['Status'] == 'Pass']['Count'].sum()
+    total_fail = processed_lob[processed_lob['Status'] == 'Fail']['Count'].sum()
+    total_hc = total_pass + total_fail
+    pass_rate = (total_pass / total_hc) * 100
+    
+    # Prepare Chart (Stacked bar by Product)
+    fig = px.bar(processed_lob, x='Product', y='Count', color='Status', 
+                 color_discrete_map={'Pass': '#2ecc71', 'Fail': '#e74c3c'}, 
+                 facet_col='Region', title="Product Performance by Region")
 
-    # Row 3: Data Table
-    st.subheader("Detailed Regional Data")
-    st.dataframe(df_region, use_container_width=True)
+
+# --- ROW 1: DATA CARDS (KPIs) ---
+st.subheader("1. Key Performance Indicators")
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric("Total Headcount/Volume", f"{total_hc}")
+col2.metric("Total Pass", f"{total_pass}")
+col3.metric("Total Fail", f"{total_fail}")
+col4.metric("Pass Rate", f"{pass_rate:.1f}%", delta_color="normal")
+
+st.markdown("---")
+
+# --- ROW 2: GRAPHS ---
+st.subheader("2. Visualization")
+st.plotly_chart(fig, use_container_width=True)
+
+st.markdown("---")
+
+# --- ROW 3: DATA TABLE ---
+st.subheader("3. Detailed Data")
+st.dataframe(main_df, use_container_width=True)
